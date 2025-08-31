@@ -1,0 +1,42 @@
+# Created by an LLM.
+
+apiVersion: 1
+
+datasources:
+  # Prometheus for metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://prometheus:9090
+    isDefault: true
+    version: 1
+    editable: true
+    jsonData:
+      timeInterval: "5s"
+      queryTimeout: "60s"
+
+  # Loki for logs
+  - name: Loki
+    type: loki
+    access: proxy
+    orgId: 1
+    url: http://loki:3100
+    version: 1
+    editable: true
+    jsonData:
+      maxLines: 1000
+      timeout: 60
+
+  # Jaeger for distributed tracing
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    orgId: 1
+    url: http://jaeger:16686
+    version: 1
+    editable: true
+    jsonData:
+      spanBar:
+        type: "Tag"
+        tag: "http.status_code"

@@ -8,9 +8,3 @@ psql:
 
 rabbitmq:
   url: "${RABBITMQ_URL}"
-
-binance:
-  base_url: "${BINANCE_BASE_URL}"
-  symbols: ${BINANCE_symbols}
-
-port: 8084

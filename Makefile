@@ -2,12 +2,13 @@ tgt_dir:=target
 tgt_temp_dir:=$(tgt_dir)/tmp
 tgt_artfs_dir:=$(tgt_dir)/artfs
 pkg:=github.com/daszybak/realtime-log-pipeline
+srcs:=$(shell find backend -name "*.go")
 
 # Build the API.
 .PHONY: api
 api: $(tgt_artfs_dir)/api
 
-$(tgt_artfs_dir)/api: | $(tgt_artfs_dir)
+$(tgt_artfs_dir)/api: $(srcs) | $(tgt_artfs_dir)
 	( \
 		cd backend/cmd/api \
 			&& go get -v \
@@ -19,7 +20,7 @@ $(tgt_artfs_dir)/api: | $(tgt_artfs_dir)
 .PHONY: worker
 worker: $(tgt_artfs_dir)/worker
 
-$(tgt_artfs_dir)/worker: | $(tgt_artfs_dir)
+$(tgt_artfs_dir)/worker: $(srcs) | $(tgt_artfs_dir)
 	( \
 		cd backend/cmd/worker \
 			&& go get -v \
@@ -31,7 +32,7 @@ $(tgt_artfs_dir)/worker: | $(tgt_artfs_dir)
 .PHONY: aggregator
 aggregator: $(tgt_artfs_dir)/aggregator
 
-$(tgt_artfs_dir)/aggregator: | $(tgt_artfs_dir)
+$(tgt_artfs_dir)/aggregator: $(srcs) | $(tgt_artfs_dir)
 	( \
 		cd backend/cmd/aggregator \
 			&& go get -v \
@@ -43,7 +44,7 @@ $(tgt_artfs_dir)/aggregator: | $(tgt_artfs_dir)
 .PHONY: streamer
 streamer: $(tgt_artfs_dir)/streamer
 
-$(tgt_artfs_dir)/streamer: | $(tgt_artfs_dir)
+$(tgt_artfs_dir)/streamer: $(srcs) | $(tgt_artfs_dir)
 	( \
 		cd backend/cmd/streamer \
 			&& go get -v \

@@ -7,7 +7,7 @@ psql:
   max_conns: 10
 
 rabbitmq:
-  base_url: "127.0.0.1:5672"
+  url: "amqp://user:pass@127.0.0.1:5672"
 
 binance:
   base_url: "wss://fstream.binance.com/ws"
@@ -15,3 +15,5 @@ binance:
     - btcusdt
     - ethusdt
     - xrpusdt
+
+port: 8084

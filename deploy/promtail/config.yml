@@ -1,0 +1,132 @@
+# Created by an LLM.
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape only our realtime-log-pipeline containers
+  - job_name: realtime-log-pipeline
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.docker.compose.project=realtime-log-pipeline"]
+    relabel_configs:
+      # Extract container name
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+
+      # Extract log stream (stdout/stderr)
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: "stream"
+
+      # Extract service name from compose label
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "service"
+
+      # Extract compose project name
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: "compose_project"
+
+      # Extract container ID (short)
+      - source_labels: ["__meta_docker_container_id"]
+        regex: "(.{12}).*"
+        target_label: "container_id"
+
+      # Add environment label (dev/prod based on compose file)
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_config_files"]
+        regex: ".*(dev).*"
+        target_label: "environment"
+        replacement: "development"
+
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_config_files"]
+        regex: '.*(?!dev).*docker-compose\.yml.*'
+        target_label: "environment"
+        replacement: "production"
+
+      # Only scrape our application services (exclude infra like postgres, rabbitmq)
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        regex: "(api|worker|aggregator|streamer|app)"
+        action: keep
+
+    pipeline_stages:
+      # Parse JSON logs from our Go services
+      - json:
+          expressions:
+            level: level
+            timestamp: time
+            message: message
+            component: component
+            role: role
+            trace_id: trace_id
+            symbol: symbol
+
+      # Set log level
+      - labels:
+          level:
+          component:
+          role:
+          trace_id:
+          symbol:
+
+      # Add timestamp if available
+      - timestamp:
+          source: timestamp
+          format: Unix
+          fallback_formats:
+            - RFC3339
+            - RFC3339Nano
+
+      # Output format
+      - output:
+          source: message
+
+  # Optional: Scrape infrastructure logs separately with different retention
+  - job_name: realtime-log-pipeline-infra
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+        filters:
+          - name: label
+            values: ["com.docker.compose.project=realtime-log-pipeline"]
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "service"
+
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: "compose_project"
+
+      # Only scrape infrastructure services
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        regex: "(postgres|rabbitmq|prometheus|grafana|loki|jaeger)"
+        action: keep
+
+    pipeline_stages:
+      # Different parsing for infrastructure logs
+      - labels:
+          service:
+
+      # Less verbose output for infra
+      - output:
+          source: output

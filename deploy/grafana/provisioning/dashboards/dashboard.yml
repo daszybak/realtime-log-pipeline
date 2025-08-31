@@ -1,3 +1,5 @@
+# Created by an LLM.
+
 apiVersion: 1
 
 providers:
@@ -10,5 +12,3 @@ providers:
     allowUiUpdates: true
     options:
       path: /etc/grafana/provisioning/dashboards
-
-

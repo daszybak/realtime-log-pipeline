@@ -17,10 +17,10 @@ type config struct {
 		MaxConns int    `yaml:"max_conns"`
 	} `yaml:"psql"`
 	RabbitMQ struct {
-		BaseURL string `yaml:"base_url"`
+		URL string `yaml:"url"`
 	} `yaml:"rabbitmq"`
 	Binance struct {
-		BaseURL string `yaml:"base_url"`
+		BaseURL string   `yaml:"base_url"`
 		Symbols []string `yaml:"symbols"`
 	} `yaml:"binance"`
 }

@@ -1,11 +1,14 @@
 # Created by an LLM.
-# Edited by me: image versions, grafana x-frame-options.
+# Edited by me: image versions, grafana x-frame-options, rabbitmq, grafana's credentials to match postgresql's.
 
 # Development Docker Compose
 # Run infrastructure services in containers
 # Run Go services and React app locally with `just` for hot-reload
 
 # Note: version field omitted as per latest Docker Compose standards
+
+# Set project name for log filtering
+name: realtime-log-pipeline
 
 networks:
   dev-network:
@@ -16,6 +19,8 @@ volumes:
   grafana-dev-data:
   rabbitmq-dev-data:
   prometheus-dev-data:
+  loki-dev-data:
+  jaeger-dev-data:
 
 services:
   # Database
@@ -38,15 +43,17 @@ services:
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
 
-  # Message broker
+  # Message broker with Prometheus metrics
   rabbitmq:
-    image: rabbitmq:4.1.3
+    image: rabbitmq:4.1.3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI
+      - "15692:15692" # Prometheus metrics port
     environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=pass
+      - RABBITMQ_ENABLED_PLUGINS_FILE=/etc/rabbitmq/enabled_plugins
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 15s
@@ -56,6 +63,7 @@ services:
       - dev-network
     volumes:
       - rabbitmq-dev-data:/var/lib/rabbitmq
+      - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
 
   # Monitoring and observability
   prometheus:
@@ -76,18 +84,66 @@ services:
     networks:
       - dev-network
 
+  # Distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # Collector HTTP endpoint
+      - "6831:6831/udp" # Agent compact thrift
+      - "6832:6832/udp" # Agent binary thrift
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=info
+      - SPAN_STORAGE_TYPE=memory
+    networks:
+      - dev-network
+    volumes:
+      - jaeger-dev-data:/tmp
+
+  # Log aggregation
+  loki:
+    image: grafana/loki:2.9.0
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - dev-network
+    volumes:
+      - loki-dev-data:/loki
+
+  # Log collection (collects Docker container logs)
+  promtail:
+    image: grafana/promtail:2.9.0
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./deploy/promtail:/etc/promtail:ro
+    networks:
+      - dev-network
+    depends_on:
+      - loki
+    labels:
+      - "promtail.exclude=true" # Don't collect promtail's own logs
+
+  # Grafana with enhanced observability
   grafana:
     image: grafana/grafana:11.5
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=user
+      - GF_SECURITY_ADMIN_PASSWORD=pass
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      # Enhanced plugins for observability and financial data
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-clock-panel,grafana-polystat-panel
       # NOTE Only for local development.
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_SECURITY_X_FRAME_OPTIONS=allowall
+      # Enable Jaeger tracing
+      - GF_TRACING_JAEGER_ADDRESS=jaeger:14268
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-dev-data:/var/lib/grafana
@@ -95,6 +151,8 @@ services:
       - dev-network
     depends_on:
       - prometheus
+      - loki
+      - jaeger
 
   # Optional containerized Go services (use scripts/with_build.sh)
   # Uncomment when you want to run services in containers instead of locally
@@ -107,6 +165,7 @@ services:
   #   command: ["./scripts/run_service.sh", "api"]
   #   ports:
   #     - "8081:8081"
+  #     # TODO: Add dedicated metrics port - "9001:9001"
   #   environment:
   #     - PSQL_ADDR=postgres
   #     - PSQL_PORT=5432
@@ -114,7 +173,8 @@ services:
   #     - PSQL_PASS=pass
   #     - PSQL_DB=db
   #     - PSQL_MAX_CONNS=10
-  #     - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+  #     - RABBITMQ_URL=amqp://user:pass@rabbitmq:5672/
+  #     - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
@@ -125,6 +185,8 @@ services:
   #   volumes:
   #     - .:/workspace:cached
   #     - /workspace/target  # Anonymous volume for build artifacts
+  #   labels:
+  #     - "service.type=application"
 
   # worker:
   #   build:
@@ -132,6 +194,9 @@ services:
   #     dockerfile: build.Dockerfile
   #     target: dev
   #   command: ["./scripts/run_service.sh", "worker"]
+  #   ports:
+  #     - "8082:8082"
+  #     # TODO: Add dedicated metrics port - "9002:9002"
   #   environment:
   #     - PSQL_ADDR=postgres
   #     - PSQL_PORT=5432
@@ -139,7 +204,8 @@ services:
   #     - PSQL_PASS=pass
   #     - PSQL_DB=db
   #     - PSQL_MAX_CONNS=10
-  #     - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+  #     - RABBITMQ_URL=amqp://user:pass@rabbitmq:5672/
+  #     - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
@@ -150,6 +216,8 @@ services:
   #   volumes:
   #     - .:/workspace:cached
   #     - /workspace/target
+  #   labels:
+  #     - "service.type=application"
 
   # aggregator:
   #   build:
@@ -159,6 +227,7 @@ services:
   #   command: ["./scripts/run_service.sh", "aggregator"]
   #   ports:
   #     - "8083:8083"
+  #     # TODO: Add dedicated metrics port - "9003:9003"
   #   environment:
   #     - PSQL_ADDR=postgres
   #     - PSQL_PORT=5432
@@ -166,6 +235,7 @@ services:
   #     - PSQL_PASS=pass
   #     - PSQL_DB=db
   #     - PSQL_MAX_CONNS=10
+  #     - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
@@ -174,6 +244,8 @@ services:
   #   volumes:
   #     - .:/workspace:cached
   #     - /workspace/target
+  #   labels:
+  #     - "service.type=application"
 
   # streamer:
   #   build:
@@ -183,6 +255,7 @@ services:
   #   command: ["./scripts/run_service.sh", "streamer"]
   #   ports:
   #     - "8084:8084"
+  #     # TODO: Add dedicated metrics port - "9004:9004"
   #   environment:
   #     - PSQL_ADDR=postgres
   #     - PSQL_PORT=5432
@@ -190,7 +263,8 @@ services:
   #     - PSQL_PASS=pass
   #     - PSQL_DB=db
   #     - PSQL_MAX_CONNS=10
-  #     - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+  #     - RABBITMQ_URL=amqp://user:pass@rabbitmq:5672/
+  #     - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
@@ -201,3 +275,5 @@ services:
   #   volumes:
   #     - .:/workspace:cached
   #     - /workspace/target
+  #   labels:
+  #     - "service.type=application"

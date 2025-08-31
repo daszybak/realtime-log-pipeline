@@ -16,33 +16,44 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # Scrape the API service (running locally)
+  # Scrape the API service metrics (running locally)
+  # TODO: Move metrics to dedicated port (9001) for security
   - job_name: "api"
     static_configs:
-      - targets: ["host.docker.internal:8081"] # Access host from container
+      - targets: ["host.docker.internal:8081"] # API service port (metrics on /metrics)
     metrics_path: "/metrics"
-    scrape_interval: 30s
+    scrape_interval: 15s
 
-  # Scrape the aggregator service (running locally)
+  # Scrape the Worker service metrics (running locally)
+  # TODO: Move metrics to dedicated port (9002) for security
+  - job_name: "worker"
+    static_configs:
+      - targets: ["host.docker.internal:8082"] # Worker service port (metrics on /metrics)
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  # Scrape the aggregator service metrics (running locally)
+  # TODO: Move metrics to dedicated port (9003) for security
   - job_name: "aggregator"
     static_configs:
-      - targets: ["host.docker.internal:8083"]
+      - targets: ["host.docker.internal:8083"] # Aggregator service port (metrics on /metrics)
     metrics_path: "/metrics"
-    scrape_interval: 30s
+    scrape_interval: 15s
 
-  # Scrape the streamer service (running locally)
+  # Scrape the streamer service metrics (running locally)
+  # TODO: Move metrics to dedicated port (9004) for security
   - job_name: "streamer"
     static_configs:
-      - targets: ["host.docker.internal:8084"]
+      - targets: ["host.docker.internal:8084"] # Streamer service port (metrics on /metrics)
     metrics_path: "/metrics"
-    scrape_interval: 30s
+    scrape_interval: 5s # More frequent for real-time data
 
   # RabbitMQ management metrics (in container)
   - job_name: "rabbitmq"
     static_configs:
       - targets: ["rabbitmq:15692"] # RabbitMQ Prometheus plugin port
     metrics_path: "/metrics"
-    scrape_interval: 30s
+    scrape_interval: 15s
 
   # PostgreSQL exporter (if you add postgres_exporter)
   # - job_name: 'postgres'
@@ -50,3 +61,8 @@ scrape_configs:
   #     - targets: ['postgres-exporter:9187']
   #   scrape_interval: 30s
 
+  # Docker container metrics (if you add cadvisor)
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']
+  #   scrape_interval: 30s
