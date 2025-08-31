@@ -7,18 +7,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// NOTE `config` and its substructures must not be exported. Endpoints that
-// require values from it should have those values injected through
-// request-local context objects.
 type config struct {
-	PostgreSQL        struct {
+	PSQL struct {
 		Addr     string `yaml:"addr"`
 		Port     int    `yaml:"port"`
 		User     string `yaml:"user"`
 		Pass     string `yaml:"pass"`
 		DB       string `yaml:"db"`
 		MaxConns int    `yaml:"max_conns"`
-	} `yaml:"postgresql"`
+	} `yaml:"psql"`
+	RabbitMQ struct {
+		BaseURL string `yaml:"base_url"`
+	} `yaml:"rabbitmq"`
+	Binance struct {
+		BaseURL string `yaml:"base_url"`
+		Symbols []string `yaml:"symbols"`
+	} `yaml:"binance"`
 }
 
 func readConfig(path string) (*config, error) {
@@ -35,4 +39,3 @@ func readConfig(path string) (*config, error) {
 
 	return config, nil
 }
-

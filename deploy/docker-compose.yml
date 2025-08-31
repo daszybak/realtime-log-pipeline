@@ -1,0 +1,229 @@
+# Created by an LLM.
+# Edited by me: image versions.
+
+# Note: version field omitted as per latest Docker Compose standards
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  grafana-data:
+
+services:
+  # Frontend React app
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://localhost:8081
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # API service (main backend service)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api
+    ports:
+      - "8081:8081"
+    environment:
+      - PSQL_ADDR=postgres
+      - PSQL_PORT=5432
+      - PSQL_USER=user
+      - PSQL_PASS=pass
+      - PSQL_DB=db
+      - PSQL_MAX_CONNS=10
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+    volumes:
+      - ./backend/configs:/app/configs:ro
+
+  # Worker service (background job processor)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: worker
+    environment:
+      - PSQL_ADDR=postgres
+      - PSQL_PORT=5432
+      - PSQL_USER=user
+      - PSQL_PASS=pass
+      - PSQL_DB=db
+      - PSQL_MAX_CONNS=10
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    volumes:
+      - ./backend/configs:/app/configs:ro
+    # Scale with: docker-compose up --scale worker=3
+
+  # Aggregator service (data aggregation)
+  aggregator:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: aggregator
+    ports:
+      - "8083:8083"  # Fixed port mapping
+    environment:
+      - PSQL_ADDR=postgres
+      - PSQL_PORT=5432
+      - PSQL_USER=user
+      - PSQL_PASS=pass
+      - PSQL_DB=db
+      - PSQL_MAX_CONNS=10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+    volumes:
+      - ./backend/configs:/app/configs:ro
+
+  # streamer service (data polling/ingestion)
+  streamer:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: streamer
+    ports:
+      - "8084:8084"
+    environment:
+      - PSQL_ADDR=postgres
+      - PSQL_PORT=5432
+      - PSQL_USER=user
+      - PSQL_PASS=pass
+      - PSQL_DB=db
+      - PSQL_MAX_CONNS=10
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+    volumes:
+      - ./backend/configs:/app/configs:ro
+
+  # Message broker
+  rabbitmq:
+    image: rabbitmq:4.1.3
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - app-network
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  # Database
+  postgres:
+    image: postgres:17.6
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=db
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - app-network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  # Monitoring and observability
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./deploy/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    networks:
+      - app-network
+    depends_on:
+      - api
+      - aggregator
+
+  grafana:
+    image: grafana/grafana:11.5
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+
+volumes:
+  rabbitmq-data:
+  prometheus-data:

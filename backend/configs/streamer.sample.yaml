@@ -1,0 +1,15 @@
+psql:
+  addr: "${PSQL_ADDR}"
+  port: ${PSQL_PORT}
+  user: "${PSQL_USER}"
+  pass: "${PSQL_PASS}"
+  db: "${PSQL_DB}"
+  max_conns: ${PSQL_MAX_CONNS}
+
+rabbitmq:
+  base_url: "${RABBITMQ_URL}"
+
+binance:
+  base_url: "${BINANCE_BASE_URL}"
+  symbols: ${BINANCE_symbols}
+

@@ -1,0 +1,72 @@
+# Created by an LLM.
+# Edited by me: docker version.
+
+# Multi-stage Dockerfile for all Go backend services
+# Based on the Makefile build process and air.toml configurations
+
+# Build stage
+FROM golang:1.25.0
+
+# Install build dependencies
+RUN apk add --no-cache git make
+
+# Set working directory
+WORKDIR /build
+
+# Copy go.mod and go.sum for dependency caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the entire backend source
+COPY backend/ ./backend/
+COPY Makefile ./
+
+# Create target directories
+RUN mkdir -p target/artfs
+
+# Build all services
+RUN make api && \
+    make worker && \
+    make aggregator && \
+    make streamer
+
+# API service image
+FROM alpine:3.21@sha256:21dc6063fd678b478f57c0e13f47560d0ea4eeba26dfc947b2a4f81f686b9f45 AS api
+RUN apk add --no-cache ca-certificates wget
+WORKDIR /app
+COPY --from=builder /build/target/artfs/api /app/api
+RUN chmod +x /app/api
+EXPOSE 8081
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --start-interval=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8081/health || exit 1
+CMD ["/app/api", "/app/configs/api.yaml", "0.0.0.0:8081"]
+
+# Worker service image  
+FROM alpine:3.21@sha256:21dc6063fd678b478f57c0e13f47560d0ea4eeba26dfc947b2a4f81f686b9f45 AS worker
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=builder /build/target/artfs/worker /app/worker
+RUN chmod +x /app/worker
+CMD ["/app/worker", "/app/configs/worker.yaml", "0.0.0.0:8082"]
+
+# Aggregator service image
+FROM alpine:3.21@sha256:21dc6063fd678b478f57c0e13f47560d0ea4eeba26dfc947b2a4f81f686b9f45 AS aggregator
+RUN apk add --no-cache ca-certificates wget
+WORKDIR /app
+COPY --from=builder /build/target/artfs/aggregator /app/aggregator
+RUN chmod +x /app/aggregator
+EXPOSE 8083
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --start-interval=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8083/metrics || exit 1
+CMD ["/app/aggregator", "/app/configs/aggregator.yaml", "0.0.0.0:8083"]
+
+# streamer service image
+FROM alpine:3.21@sha256:21dc6063fd678b478f57c0e13f47560d0ea4eeba26dfc947b2a4f81f686b9f45 AS streamer
+RUN apk add --no-cache ca-certificates wget
+WORKDIR /app
+COPY --from=builder /build/target/artfs/streamer /app/streamer
+RUN chmod +x /app/streamer
+EXPOSE 8084
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --start-interval=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8084/health || exit 1
+CMD ["/app/streamer", "/app/configs/streamer.yaml", "0.0.0.0:8084"]

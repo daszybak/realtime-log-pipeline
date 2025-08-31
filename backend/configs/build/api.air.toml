@@ -1,0 +1,25 @@
+root = "."
+tmp_dir = "target/tmp/air_api"
+testdata_dir = "target/tmp/air_api_testdata"
+
+[build]
+  # Build output binary
+  bin = "target/artfs/api"
+
+  # What to run on changes (build and run main.go)
+  cmd = "make api"
+
+  # Don’t rebuild on tests
+  exclude_regex = ["_test.go"]
+
+  # Only watch this directory
+  include_dir = ["backend"]
+
+  # Watch Go source + configs
+  include_ext = ["go", "yaml"]
+
+  # Restart behavior
+  kill_delay = "500ms"
+  log = "target/tmp/air.log"
+  send_interrupt = true
+  stop_on_error = true

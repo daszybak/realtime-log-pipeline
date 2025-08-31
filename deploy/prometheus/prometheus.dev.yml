@@ -1,0 +1,52 @@
+# Created by an LLM.
+
+# Prometheus configuration for local development
+# Use when running Go services locally with `just`
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Scrape the API service (running locally)
+  - job_name: "api"
+    static_configs:
+      - targets: ["host.docker.internal:8081"] # Access host from container
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # Scrape the aggregator service (running locally)
+  - job_name: "aggregator"
+    static_configs:
+      - targets: ["host.docker.internal:8083"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # Scrape the streamer service (running locally)
+  - job_name: "streamer"
+    static_configs:
+      - targets: ["host.docker.internal:8084"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # RabbitMQ management metrics (in container)
+  - job_name: "rabbitmq"
+    static_configs:
+      - targets: ["rabbitmq:15692"] # RabbitMQ Prometheus plugin port
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # PostgreSQL exporter (if you add postgres_exporter)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #   scrape_interval: 30s
+

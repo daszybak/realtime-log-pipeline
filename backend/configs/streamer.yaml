@@ -1,0 +1,17 @@
+psql:
+  addr: "127.0.0.1"
+  port: 5432
+  user: "user"
+  pass: "pass"
+  db: "db"
+  max_conns: 10
+
+rabbitmq:
+  base_url: "127.0.0.1:5672"
+
+binance:
+  base_url: "wss://fstream.binance.com/ws"
+  symbols:
+    - btcusdt
+    - ethusdt
+    - xrpusdt

@@ -1,0 +1,9 @@
+# Configuration files.
+backend/configs/api.yaml
+
+# Build directory.
+target/*
+
+# App deps.
+app/node_modules
+
