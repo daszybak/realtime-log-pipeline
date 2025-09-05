@@ -1,0 +1,169 @@
+discovery.docker "realtime_log_pipeline" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "5s"
+
+	filter {
+		name   = "label"
+		values = ["com.docker.compose.project=realtime-log-pipeline"]
+	}
+}
+
+loki.process "realtime_log_pipeline" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.json {
+		expressions = {
+			component = "component",
+			level     = "level",
+			message   = "message",
+			role      = "role",
+			symbol    = "symbol",
+			timestamp = "time",
+			trace_id  = "trace_id",
+		}
+	}
+
+	stage.labels {
+		values = {
+			component = null,
+			level     = null,
+			role      = null,
+			symbol    = null,
+			trace_id  = null,
+		}
+	}
+
+	stage.timestamp {
+		source           = "timestamp"
+		format           = "Unix"
+		fallback_formats = ["RFC3339", "RFC3339Nano"]
+	}
+
+	stage.output {
+		source = "message"
+	}
+}
+
+discovery.relabel "realtime_log_pipeline" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_id"]
+		regex         = "(.{12}).*"
+		target_label  = "container_id"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_config_files"]
+		regex         = ".*(dev).*"
+		target_label  = "environment"
+		replacement   = "development"
+	}
+
+	rule {
+		source_labels = ["environment"]
+		regex         = "^$"
+		target_label  = "environment"
+		replacement   = "production"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		regex         = "(api|worker|aggregator|streamer|app)"
+		action        = "keep"
+	}
+}
+
+loki.source.docker "realtime_log_pipeline" {
+	host             = "unix:///var/run/docker.sock"
+	targets          = discovery.docker.realtime_log_pipeline.targets
+	forward_to       = [loki.process.realtime_log_pipeline.receiver]
+	relabel_rules    = discovery.relabel.realtime_log_pipeline.rules
+	refresh_interval = "5s"
+}
+
+discovery.docker "realtime_log_pipeline_infra" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "15s"
+
+	filter {
+		name   = "label"
+		values = ["com.docker.compose.project=realtime-log-pipeline"]
+	}
+}
+
+loki.process "realtime_log_pipeline_infra" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.labels {
+		values = {
+			service = null,
+		}
+	}
+
+	stage.output {
+		source = "output"
+	}
+}
+
+discovery.relabel "realtime_log_pipeline_infra" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		regex         = "(postgres|rabbitmq|prometheus|grafana|loki|jaeger)"
+		action        = "keep"
+	}
+}
+
+loki.source.docker "realtime_log_pipeline_infra" {
+	host             = "unix:///var/run/docker.sock"
+	targets          = discovery.docker.realtime_log_pipeline_infra.targets
+	forward_to       = [loki.process.realtime_log_pipeline_infra.receiver]
+	relabel_rules    = discovery.relabel.realtime_log_pipeline_infra.rules
+	refresh_interval = "15s"
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+	external_labels = {}
+}

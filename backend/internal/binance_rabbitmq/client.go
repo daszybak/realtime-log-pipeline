@@ -84,7 +84,7 @@ func New(client RabbitMQClient) (*Client, error) {
 type Message struct {
 	Data    any
 	TraceID string
-	Headers map[string]interface{}
+	Headers map[string]any
 }
 
 // TODO Create `pkg/rabbitmq/publisher.go` to create
