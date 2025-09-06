@@ -19,9 +19,7 @@ type config struct {
 	RabbitMQ struct {
 		URL string `yaml:"url"`
 	}
-	Binance struct {
-		URL string `yaml:"url"`
-	}
+	Port int `yaml:"port"`
 }
 
 func readConfig(path string) (*config, error) {

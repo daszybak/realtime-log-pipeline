@@ -1,7 +1,8 @@
 import { createRootRoute } from "@tanstack/react-router";
-import { createGrafanaRoute } from "~/features/grafana/routes";
-import { createAppLayoutRoute } from "~/features/layout/routes";
-import { createUploadRoute } from "~/features/upload/routes";
+
+import { createGrafanaRoute } from "~/features/grafana";
+import { createAppLayoutRoute } from "~/features/layout";
+import { createUploadRoute } from "~/features/upload";
 
 const RootRoute = createRootRoute();
 
@@ -11,8 +12,5 @@ const UploadRoute = createUploadRoute(AppLayoutRoute);
 const GrafanaRoute = createGrafanaRoute(AppLayoutRoute);
 
 export const routeTree = RootRoute.addChildren([
-  AppLayoutRoute.addChildren([
-      UploadRoute,
-      GrafanaRoute
-  ]),
+  AppLayoutRoute.addChildren([UploadRoute, GrafanaRoute]),
 ]);

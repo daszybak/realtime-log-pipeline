@@ -18,7 +18,7 @@ import (
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	logger := log.With().Str("role", "streamer").Logger()
+	logger := log.With().Str("service", "streamer").Logger()
 	setupLogger := log.With().Str("category", "setup").Logger()
 
 	argv := os.Args
@@ -93,7 +93,7 @@ func run(
 		return fmt.Errorf("couldn't set up RabbitMQ Client: %w", err)
 	}
 	setupLogger.Info().Str("component", "rabbitmq").Msg("RabbitMQ client instantiated")
-	binanceRabbitMQClient, err := binance_rabbitmq.New(rabbitMQClient)
+	binanceRabbitMQClient, err := binance_rabbitmq.New[*binance.WsBookTickerEvent](rabbitMQClient)
 	if err != nil {
 		return fmt.Errorf("couldn't set up Binance RabbitMQ Client: %w", err)
 	}
@@ -101,7 +101,7 @@ func run(
 	binanceRabbitMQLogger.Info().Msg("Binance RabbitMQ Client instantiated")
 
 	binanceHandler := func(event *binance.WsBookTickerEvent) {
-		err = binanceRabbitMQClient.Publish(&binance_rabbitmq.Message{
+		err = binanceRabbitMQClient.Publish(&binance_rabbitmq.Message[*binance.WsBookTickerEvent]{
 			TraceID: "",
 			Data:    event,
 		})

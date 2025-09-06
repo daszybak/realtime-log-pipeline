@@ -1,4 +1,22 @@
-# TODO Finish.
-#
-#
+name: CI
 
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Just
+        run: |
+          sudo snap install --edge --classic just || \
+          sudo apt-get update && sudo apt-get install -y just
+
+      - name: Run tests
+        run: just check

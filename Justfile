@@ -91,8 +91,14 @@ dev_streamer conf='backend/configs/streamer.yaml' addr='0.0.0.0:8084':
         '{{conf}}' \
         '{{addr}}'
 
+# Run all test.
+check: check_style check_lint
+
 # Run style checks.
-check_style: check_go_style check_yaml_style check_js_lint
+check_style: check_go_style check_yaml_style
+
+# Run lint checks.
+check_lint: check_go_lint check_js_lint
 
 # Check for semantic issues in Go files.
 check_go_lint:

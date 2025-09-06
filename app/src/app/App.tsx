@@ -4,8 +4,8 @@ import { router } from "./router";
 
 export function App() {
   return (
-      <ClientOnly>
-              <RouterProvider router={router} />
-              </ClientOnly>
+    <ClientOnly>
+      <RouterProvider router={router} />
+    </ClientOnly>
   );
 }

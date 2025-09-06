@@ -1,4 +1,5 @@
 import { type AnyRoute, createRoute } from "@tanstack/react-router";
+
 import { Grafana } from "./Grafana";
 
 export function createGrafanaRoute<P extends AnyRoute>(parent: P) {

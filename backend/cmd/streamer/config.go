@@ -23,6 +23,7 @@ type config struct {
 		BaseURL string   `yaml:"base_url"`
 		Symbols []string `yaml:"symbols"`
 	} `yaml:"binance"`
+	Port int `yaml:"port"`
 }
 
 func readConfig(path string) (*config, error) {

@@ -8,7 +8,7 @@ import (
 )
 
 type config struct {
-	PSQL        struct {
+	PSQL struct {
 		Addr     string `yaml:"addr"`
 		Port     int    `yaml:"port"`
 		User     string `yaml:"user"`
@@ -32,4 +32,3 @@ func readConfig(path string) (*config, error) {
 
 	return config, nil
 }
-

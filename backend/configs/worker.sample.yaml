@@ -9,3 +9,4 @@ psql:
 rabbitmq:
   url: "${RABBITMQ_URL}"
 
+port: "${PORT}"

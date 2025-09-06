@@ -1,0 +1,1 @@
+export { createGrafanaRoute } from "./routes";

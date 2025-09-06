@@ -124,7 +124,7 @@ services:
    environment:
       ALLOY_DEPLOY_MODE: docker
    volumes:
-      - ./deploy/alloy/config.alloy:/etc/alloy/config.alloy
+      - ./deploy//config.alloy:/etc/alloy/config.alloy
       - /proc:/rootproc:ro
       - /var/run/docker.sock.raw:/var/run/docker.sock
       - /sys:/sys:ro
