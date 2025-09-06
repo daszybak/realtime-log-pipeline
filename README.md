@@ -2,23 +2,23 @@
 
 _Created by an LLM_
 
-A scalable, real-time financial data processing and monitoring pipeline built with Go, React, and comprehensive observability stack. This system handles cryptocurrency ticker data streaming from Binance, file uploads, GitHub webhook processing, and provides real-time data flow with complete metrics, tracing, and logging.
+A scalable, real-time financial data processing and monitoring pipeline built with Go, React, and comprehensive observability stack. This system handles cryptocurrency trade data streaming from Binance WebSocket API and provides real-time VWAP calculations, OHLC candle generation, and technical analysis with complete metrics, tracing, and logging.
 
 ## 🏗️ Architecture Overview
 
+### Complete Architecture
+
 ```mermaid
 graph TD
-    A["User/Browser"] -->|"Uploads file"| B["React Frontend"]
-    L["GitHub"] -->|"Webhook POST"| C["Go API"]
-    EXT["Binance WebSocket"] -->|"Live Tickers"| ST["Go Streamer"]
-    B -->|"POST /upload"| C
-    B -->|"SSE /stream"| C
+    A["User/Browser"] -->|"View Dashboard"| B["React Frontend"]
+    EXT["Binance WebSocket"] -->|"Live Trades"| ST["Go Streamer"]
+    B -->|"SSE /stream"| C["Go API"]
 
-    C -->|"Messages"| D["RabbitMQ ticker_events"]
-    ST -->|"Ticker Events"| D
-    C -->|"Metadata"| E["PostgreSQL files/events"]
+    C -->|"Messages"| D["RabbitMQ trade_events"]
+    ST -->|"Trade Events"| D
+    C -->|"Analytics Data"| E["PostgreSQL trade_data"]
 
-    D -->|"Raw Tickers"| F["Go Worker Scale: 1..N"]
+    D -->|"Raw Trades"| F["Go Worker Scale: 1..N"]
     D -->|"Queue metrics"| J["RabbitMQ Exporter"]
 
     F -->|"Processed data"| E
@@ -98,23 +98,57 @@ graph TD
     style K fill:#54a0ff
 ```
 
+### Simplified Architecture (LinkedIn)
+
+```mermaid
+graph LR
+    EXT["🏦 Binance<br/>WebSocket API"] -->|"Live Trades<br/>1000+/sec"| ST["📡 Go Streamer"]
+    ST -->|"Trade Events"| MQ["🐰 RabbitMQ<br/>Message Queue"]
+
+    MQ -->|"Parallel Processing"| W["⚙️ Go Workers<br/>Auto-scaling"]
+    W -->|"Processed Trades"| DB["🗄️ PostgreSQL<br/>Time-series DB"]
+
+    W -->|"Trade Data"| AGG["📊 Go Aggregator<br/>VWAP Calculator"]
+    AGG -->|"OHLC Candles<br/>Technical Indicators"| DB
+
+    DB -->|"Real-time Data"| UI["⚛️ React Dashboard<br/>Live Charts"]
+
+    subgraph "🔍 Observability"
+        OBS["Grafana + Prometheus<br/>Jaeger + Loki"]
+    end
+
+    ST -.->|"Metrics & Traces"| OBS
+    W -.->|"Metrics & Traces"| OBS
+    AGG -.->|"Metrics & Traces"| OBS
+    OBS -->|"Monitoring"| UI
+
+    style EXT fill:#e74c3c,color:#fff
+    style ST fill:#3498db,color:#fff
+    style MQ fill:#f39c12,color:#fff
+    style W fill:#27ae60,color:#fff
+    style AGG fill:#9b59b6,color:#fff
+    style DB fill:#34495e,color:#fff
+    style UI fill:#16a085,color:#fff
+    style OBS fill:#95a5a6,color:#fff
+```
+
 ## 🚀 Services Overview
 
 ### Frontend Services
 
-- **React App** (Port 8080) - File upload interface with real-time streaming via Server-Sent Events (SSE)
+- **React App** (Port 8080) - Real-time trading dashboard with live charts and analytics via Server-Sent Events (SSE)
 - **Grafana** (Port 3000) - Unified observability dashboard for metrics, traces, and logs
 
 ### Backend Services
 
-- **API Service** (Port 8081) - Main HTTP API handling uploads, GitHub webhooks, and SSE streaming
-- **Worker Service** (Port 8082) - Scalable message processor for ticker data parsing and transformation
-- **Aggregator Service** (Port 8083) - Real-time data aggregation, OHLC candle generation, and analytics
-- **Streamer Service** (Port 8084) - Binance WebSocket handler for live cryptocurrency ticker data
+- **API Service** (Port 8081) - Main HTTP API serving trading data endpoints and SSE streaming for real-time updates
+- **Worker Service** (Port 8082) - Scalable message processor for trade data parsing, VWAP calculation, and transformation
+- **Aggregator Service** (Port 8083) - Real-time trade data aggregation, OHLC candle generation from executed trades, and financial analytics
+- **Streamer Service** (Port 8084) - Binance WebSocket handler for live cryptocurrency trade execution data
 
 ### Infrastructure Services
 
-- **PostgreSQL** (Port 5432) - Primary database for files, events, processed data, and aggregated analytics
+- **PostgreSQL** (Port 5432) - Primary time-series database for trade data, OHLC candles, and aggregated financial analytics
 - **RabbitMQ** (Ports 5672/15672/15692) - Message broker with topic exchanges, management UI, and Prometheus metrics
 
 ### Observability Stack
@@ -178,22 +212,22 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 ## 📊 Data Flow
 
-### Real-Time Ticker Processing
+### Real-Time Trade Processing
 
-1. **External Data**: Binance WebSocket streams live ticker data (BTC, ETH, XRP)
-2. **Data Ingestion**: Streamer service receives and validates ticker events
-3. **Message Distribution**: Events published to RabbitMQ topic exchange with routing keys
-4. **Parallel Processing**: Multiple workers consume and process ticker data
-5. **Data Aggregation**: Aggregator generates OHLC candles, moving averages, and analytics
-6. **Storage**: Raw and aggregated data stored in PostgreSQL with proper indexing
-7. **Real-time Updates**: Frontend receives live updates via WebSocket/SSE
+1. **External Data**: Binance WebSocket streams live trade execution data (BTC, ETH, XRP)
+2. **Data Ingestion**: Streamer service receives and validates individual trade events
+3. **Message Distribution**: Trade events published to RabbitMQ topic exchange with routing keys
+4. **Parallel Processing**: Multiple workers consume and process actual executed trades
+5. **Data Aggregation**: Aggregator generates OHLC candles from real trade prices, calculates VWAP, and analytics
+6. **Storage**: Raw trade data and aggregated results stored in PostgreSQL with time-series indexing
+7. **Real-time Updates**: Frontend receives live trade updates and aggregated metrics via WebSocket/SSE
 
-### File Upload & GitHub Integration
+### Real-Time Dashboard & Monitoring
 
-1. **File Upload**: Users upload files via React frontend
-2. **GitHub Integration**: Webhooks trigger processing via API service
-3. **Message Queuing**: Events streamed to RabbitMQ for asynchronous processing
-4. **Error Handling**: Failed messages route to Dead Letter Queue for retry/analysis
+1. **Live Dashboard**: React frontend displays real-time trading data and analytics
+2. **Server-Sent Events**: API service streams live updates to connected clients
+3. **Data Visualization**: Interactive charts showing OHLC candles, VWAP trends, and technical indicators
+4. **Error Handling**: Failed trade processing routes to Dead Letter Queue for retry/analysis
 
 ### Observability & Monitoring
 
@@ -229,14 +263,14 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 - **System Metrics**: CPU, memory, disk usage across all services
 - **Application Metrics**: Request rates, response times, error rates
-- **Business Metrics**: Ticker processing rates, WebSocket connection health
+- **Business Metrics**: Trade processing rates, execution volume, WebSocket connection health, VWAP accuracy
 - **Queue Metrics**: Message rates, queue depths, processing latency via RabbitMQ Prometheus plugin (port 15692)
 - **Telemetry Collection**: Alloy provides unified collection of metrics, logs, and traces
 
 ### Distributed Tracing
 
 - **OpenTelemetry Protocol**: Services send traces via OTLP (gRPC 4317, HTTP 4318) to Alloy
-- **End-to-End Visibility**: Track requests from Binance → Database with automatic span correlation
+- **End-to-End Visibility**: Track trade events from Binance → Database with automatic span correlation
 - **Performance Analysis**: Identify bottlenecks and optimization opportunities
 - **Error Investigation**: Trace failed requests across service boundaries with trace-log correlation
 - **Dependency Mapping**: Visualize service interactions and data flow
@@ -255,10 +289,11 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 ### Real-Time Analytics
 
-- **OHLC Candles**: 1m, 5m, 15m, 1h, 4h, 1d timeframes
-- **Technical Indicators**: Moving averages (SMA, EMA), RSI, MACD
-- **Volume Analysis**: Volume-weighted average price (VWAP)
-- **Cross-Symbol Correlation**: BTC/ETH/XRP relationship analysis
+- **OHLC Candles**: 1m, 5m, 15m, 1h, 4h, 1d timeframes from actual executed trades
+- **Volume-Weighted Pricing**: VWAP and TWAP calculations using real trade volumes
+- **Technical Indicators**: Moving averages (SMA, EMA), RSI, MACD based on execution prices
+- **Market Microstructure**: Buy/sell pressure analysis, trade size distribution
+- **Cross-Symbol Correlation**: BTC/ETH/XRP relationship analysis using actual market activity
 
 ### Scaling Capabilities
 
@@ -291,9 +326,9 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 ### Application APIs
 
-- `POST /upload` - File upload handling
-- `GET /stream` - Server-Sent Events for real-time updates
-- `POST /webhook/github` - GitHub webhook processing
+- `GET /stream` - Server-Sent Events for real-time trade data and analytics
+- `GET /api/candles/{symbol}` - OHLC candle data for specific cryptocurrency
+- `GET /api/vwap/{symbol}` - Volume-weighted average price calculations
 - `GET /health` - Service health checks
 
 ### Observability APIs
@@ -306,10 +341,11 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 ### Financial Data Processing
 
-- **Real-time ticker ingestion** from Binance WebSocket
-- **High-frequency data aggregation** (1000+ events/second)
-- **Financial indicators calculation** with sub-second latency
-- **Multi-symbol correlation analysis**
+- **Real-time trade execution ingestion** from Binance WebSocket API
+- **High-frequency trade aggregation** with actual market volumes and prices
+- **VWAP/TWAP calculation** using time and volume weighting from executed trades
+- **Financial indicators calculation** based on real market activity with sub-second latency
+- **Multi-symbol correlation analysis** using actual trade flow patterns
 
 ### Production-Ready Observability
 
