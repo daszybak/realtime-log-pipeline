@@ -33,7 +33,7 @@ graph TD
         H["Prometheus"]
         TR["Jaeger"]
         LO["Loki"]
-        PT["Promtail"]
+        AL["Alloy"]
         K["Grafana"]
     end
 
@@ -62,11 +62,25 @@ graph TD
     AGG -->|"Analytics traces"| TR
 
     %% Logging Flow
-    PT -->|"Container logs"| LO
-    C -.->|"App logs"| PT
-    ST -.->|"App logs"| PT
-    F -.->|"App logs"| PT
-    AGG -.->|"App logs"| PT
+    AL -->|"Container logs"| LO
+    C -.->|"App logs"| AL
+    ST -.->|"App logs"| AL
+    F -.->|"App logs"| AL
+    AGG -.->|"App logs"| AL
+
+    %% Traces Flow via Alloy
+    C -->|"OTLP traces"| AL
+    ST -->|"OTLP traces"| AL
+    F -->|"OTLP traces"| AL
+    AGG -->|"OTLP traces"| AL
+    AL -->|"Trace export"| TR
+
+    %% Metrics via Alloy
+    AL -->|"Metrics scraping"| C
+    AL -->|"Metrics scraping"| ST
+    AL -->|"Metrics scraping"| F
+    AL -->|"Metrics scraping"| AGG
+    AL -->|"Metrics forward"| H
 
     %% Visualization
     H -->|"Metrics"| K
@@ -80,6 +94,7 @@ graph TD
     style H fill:#96ceb4
     style TR fill:#feca57
     style LO fill:#ff9ff3
+    style AL fill:#9b59b6
     style K fill:#54a0ff
 ```
 
@@ -100,14 +115,14 @@ graph TD
 ### Infrastructure Services
 
 - **PostgreSQL** (Port 5432) - Primary database for files, events, processed data, and aggregated analytics
-- **RabbitMQ** (Port 5672/15672) - Message broker with topic exchanges for ticker events and Dead Letter Queue (DLQ)
+- **RabbitMQ** (Ports 5672/15672/15692) - Message broker with topic exchanges, management UI, and Prometheus metrics
 
 ### Observability Stack
 
 - **Prometheus** (Port 9090) - Time-series metrics collection and alerting
 - **Jaeger** (Port 16686) - Distributed tracing for request flow analysis
 - **Loki** (Port 3100) - Log aggregation and querying
-- **Promtail** - Log collection agent for container logs with smart filtering
+- **Alloy** (Ports 12345, 4317, 4318) - Grafana Agent for telemetry collection (metrics, logs, traces)
 - **Grafana** (Port 3000) - Unified dashboards for metrics, traces, and logs
 
 ## 🛠️ Development Setup
@@ -124,10 +139,11 @@ just dev_all
 # Access services:
 # - React App: http://localhost:8080
 # - API: http://localhost:8081
-# - Grafana: http://localhost:3000 (admin/admin)
-# - RabbitMQ Management: http://localhost:15672 (guest/guest)
+# - Grafana: http://localhost:3000 (user/pass)
+# - RabbitMQ Management: http://localhost:15672 (user/pass)
 # - Prometheus: http://localhost:9090
 # - Jaeger UI: http://localhost:16686
+# - Alloy UI: http://localhost:12345
 ```
 
 ### Alternative: Containerized Development
@@ -181,11 +197,12 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 ### Observability & Monitoring
 
-1. **Metrics Collection**: All services emit custom and system metrics to Prometheus
-2. **Distributed Tracing**: Request flows tracked end-to-end with OpenTelemetry and Jaeger
-3. **Log Aggregation**: Promtail collects container logs and ships to Loki with smart filtering
-4. **Unified Dashboards**: Grafana provides correlation between metrics, traces, and logs
-5. **Alerting**: Prometheus AlertManager for proactive monitoring
+1. **Metrics Collection**: Alloy scrapes metrics from all services and forwards to Prometheus
+2. **Distributed Tracing**: Services send OTLP traces to Alloy, which exports to Jaeger
+3. **Log Aggregation**: Alloy collects container logs with structured parsing and ships to Loki
+4. **Unified Observability**: Alloy acts as central telemetry collector for all three pillars
+5. **Unified Dashboards**: Grafana provides correlation between metrics, traces, and logs with pre-configured datasources
+6. **Alerting**: Prometheus AlertManager for proactive monitoring
 
 ## 🔧 Configuration
 
@@ -200,8 +217,11 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 - **Backend**: `backend/configs/*.yaml` - Service-specific configurations
 - **Frontend**: `app/config.js` - Frontend application settings
-- **Monitoring**: `deploy/prometheus/` and `deploy/grafana/` - Observability setup
-- **Log Collection**: `deploy/promtail/` - Log pipeline configuration
+- **Observability Stack**:
+  - `deploy/alloy/config.alloy` - Grafana Alloy telemetry collection configuration
+  - `deploy/prometheus/prometheus.yml` - Prometheus scraping configuration
+  - `deploy/grafana/provisioning/` - Grafana dashboards and datasource provisioning
+- **Message Queue**: `deploy/rabbitmq/enabled_plugins` - RabbitMQ plugin configuration
 
 ## 📈 Observability Features
 
@@ -210,20 +230,25 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 - **System Metrics**: CPU, memory, disk usage across all services
 - **Application Metrics**: Request rates, response times, error rates
 - **Business Metrics**: Ticker processing rates, WebSocket connection health
-- **Queue Metrics**: Message rates, queue depths, processing latency
+- **Queue Metrics**: Message rates, queue depths, processing latency via RabbitMQ Prometheus plugin (port 15692)
+- **Telemetry Collection**: Alloy provides unified collection of metrics, logs, and traces
 
 ### Distributed Tracing
 
-- **End-to-End Visibility**: Track requests from Binance → Database
+- **OpenTelemetry Protocol**: Services send traces via OTLP (gRPC 4317, HTTP 4318) to Alloy
+- **End-to-End Visibility**: Track requests from Binance → Database with automatic span correlation
 - **Performance Analysis**: Identify bottlenecks and optimization opportunities
-- **Error Investigation**: Trace failed requests across service boundaries
+- **Error Investigation**: Trace failed requests across service boundaries with trace-log correlation
 - **Dependency Mapping**: Visualize service interactions and data flow
+- **Batch Processing**: Optimized trace batching (8192 spans, 10s timeout) for high-throughput scenarios
 
 ### Centralized Logging
 
-- **Structured Logs**: JSON format with trace correlation
-- **Smart Filtering**: Application logs separated from infrastructure logs
-- **Query Interface**: Grafana-integrated log exploration
+- **Structured Logs**: JSON format with trace correlation via Alloy processing
+- **Smart Filtering**: Application and infrastructure logs separated with different processing pipelines
+- **Auto-Discovery**: Alloy automatically discovers and processes Docker container logs
+- **Trace Correlation**: Logs automatically correlated with traces using trace_id extraction
+- **Query Interface**: Grafana-integrated log exploration with Loki datasource
 - **Retention Policies**: Different retention for application vs infrastructure logs
 
 ## 🔄 Data Pipeline Features
@@ -249,7 +274,18 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 - **Task Runner**: Just for development workflows
 - **Build System**: Make for production builds
 - **Container Development**: Full Docker development environment
-- **Observability Testing**: Local stack mirrors production monitoring
+- **Observability Testing**: Local stack mirrors production monitoring with Alloy
+- **Telemetry Debugging**: Alloy UI (port 12345) for pipeline monitoring and debugging
+
+## 📦 Service Versions (docker-compose.dev.yml)
+
+- **PostgreSQL**: 17.6
+- **RabbitMQ**: 4.1.3-management (with Prometheus plugin)
+- **Prometheus**: v3.5.0
+- **Grafana**: 11.5 (with enhanced plugins)
+- **Grafana Alloy**: v1.10.0
+- **Loki**: 2.9.0
+- **Jaeger**: 1.55 (all-in-one with OTLP support)
 
 ## 📚 API Endpoints
 
@@ -277,9 +313,11 @@ docker-compose -f deploy/docker-compose.yml up --scale worker=5 -d
 
 ### Production-Ready Observability
 
-- **Three pillars of observability**: Metrics, traces, logs
-- **Correlation across data types** with trace IDs
-- **Performance monitoring** at scale
+- **Unified telemetry collection** via Grafana Alloy
+- **Three pillars of observability**: Metrics, traces, logs with automatic correlation
+- **OpenTelemetry standard** for trace collection and export
+- **Auto-discovery** of containerized services
+- **Performance monitoring** at scale with optimized batching
 - **Proactive alerting** and anomaly detection
 
 ### Microservices Architecture

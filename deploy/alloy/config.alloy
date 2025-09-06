@@ -16,7 +16,7 @@ loki.process "realtime_log_pipeline" {
 			component = "component",
 			level     = "level",
 			message   = "message",
-			role      = "role",
+			service   = "service",
 			symbol    = "symbol",
 			timestamp = "time",
 			trace_id  = "trace_id",
@@ -27,7 +27,7 @@ loki.process "realtime_log_pipeline" {
 		values = {
 			component = null,
 			level     = null,
-			role      = null,
+			service   = null,
 			symbol    = null,
 			trace_id  = null,
 		}
@@ -166,4 +166,101 @@ loki.write "default" {
 		url = "http://loki:3100/loki/api/v1/push"
 	}
 	external_labels = {}
+}
+
+
+// === Prometheus scrapes in Alloy ===
+
+// Prometheus itself (optional, mostly for debugging Alloy)
+prometheus.scrape "self" {
+  targets         = ["localhost:9090"]
+  scrape_interval = "15s"
+}
+
+// API service
+prometheus.scrape "api" {
+  targets         = ["host.docker.internal:8081"]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Worker service
+prometheus.scrape "worker" {
+  targets         = ["host.docker.internal:8082"]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Aggregator service
+prometheus.scrape "aggregator" {
+  targets         = ["host.docker.internal:8083"]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Streamer service
+prometheus.scrape "streamer" {
+  targets         = ["host.docker.internal:8084"]
+  scrape_interval = "5s"
+  metrics_path    = "/metrics"
+}
+
+// RabbitMQ management metrics
+prometheus.scrape "rabbitmq" {
+  targets         = ["rabbitmq:15692"]
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Optional exporters (commented out)
+// prometheus.scrape "postgres" {
+//   targets         = ["postgres-exporter:9187"]
+//   scrape_interval = "30s"
+// }
+// prometheus.scrape "cadvisor" {
+//   targets         = ["cadvisor:8080"]
+//   scrape_interval = "30s"
+// }
+
+// === Forward to Prometheus ===
+prometheus.remote_write "to_prometheus" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+
+// === OpenTelemetry Traces ===
+
+// OTLP receiver (services send traces to Alloy on gRPC 4317 and HTTP 4318)
+otlp.receiver "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+}
+
+// Export traces to Jaeger all-in-one (already in docker-compose)
+otelcol.exporter.jaeger "default" {
+  endpoint {
+    url = "http://jaeger:14268/api/traces"
+  }
+}
+
+// Pipeline: OTLP -> Jaeger
+otelcol.processor.batch "default" {
+  timeout  = "10s"
+  send_batch_size = 8192
+}
+
+otelcol.service "traces" {
+  pipelines {
+    traces = [
+      otlp.receiver.default,
+      otelcol.processor.batch.default,
+      otelcol.exporter.jaeger.default,
+    ]
+  }
 }

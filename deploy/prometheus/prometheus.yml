@@ -1,46 +1,11 @@
 # Created by an LLM.
 
-# Prometheus configuration for production deployment
-# Use when running services in containers
+# Prometheus configuration for local development
+# Use when running Go services locally with `just`
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
 rule_files:
-  # - "alert_rules.yml"
-
-scrape_configs:
-  # Prometheus itself
-  - job_name: "prometheus"
-    static_configs:
-      - targets: ["localhost:9090"]
-
-  # All Go services running in containers (production)
-  - job_name: "realtime-log-pipeline"
-    static_configs:
-      - targets:
-          - "api:9001" # API service metrics
-          - "worker:9002" # Worker service metrics
-          - "aggregator:9003" # Aggregator service metrics
-          - "streamer:9004" # Streamer service metrics
-    metrics_path: "/metrics"
-    scrape_interval: 15s
-
-  # RabbitMQ metrics via management plugin
-  - job_name: "rabbitmq"
-    static_configs:
-      - targets: ["rabbitmq:15692"]
-    metrics_path: "/metrics"
-    scrape_interval: 15s
-
-  # PostgreSQL metrics (if you add pg_exporter)
-  # - job_name: "postgres"
-  #   static_configs:
-  #     - targets: ["postgres-exporter:9187"]
-  #   scrape_interval: 30s
-
-  # Container metrics (if you add cadvisor)
-  # - job_name: "cadvisor"
-  #   static_configs:
-  #     - targets: ["cadvisor:8080"]
-  #   scrape_interval: 30s
+  # - "first_rules.yml"
+  # - "second_rules.yml"

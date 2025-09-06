@@ -110,6 +110,9 @@ func run(
 			Str("best_asl_price", m.Data.BestAskPrice).
 			Msg("Received event from RabbitMQ")
 	}
+	if err != nil {
+		return fmt.Errorf("couldn't create BinanceRabbitMQClient consumer: %w", err)
+	}
 
 	setupLogger.Info().Msg("worker is running, press Ctrl+C to stop.")
 	interrupt := make(chan os.Signal, 1)
@@ -130,11 +133,8 @@ func handleBinanceTickerBook(
 	streamerLogger zerolog.Logger,
 	symbols []string,
 	handler binance.WsBookTickerHandler,
-) ([]chan struct{}, []chan struct{}) {
+) (stopChannels []chan struct{}, doneChannels []chan struct{}) {
 	binanceLogger := streamerLogger.With().Str("component", "binance").Logger()
-
-	var stopChannels []chan struct{}
-	var doneChannels []chan struct{}
 
 	for _, symbol := range symbols {
 		binanceLogger.Info().Str("symbol", symbol).Msg("Setting up websocket connection.")

@@ -81,7 +81,7 @@ services:
       - "--web.enable-lifecycle"
       - "--web.enable-admin-api"
     volumes:
-      - ./deploy/prometheus/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-dev-data:/prometheus
     networks:
       - dev-network
