@@ -93,15 +93,15 @@ func run(
 		return fmt.Errorf("couldn't set up RabbitMQ Client: %w", err)
 	}
 	setupLogger.Info().Str("component", "rabbitmq").Msg("RabbitMQ client instantiated")
-	binanceRabbitMQClient, err := binance_rabbitmq.New[*binance.WsBookTickerEvent](rabbitMQClient)
+	binanceRabbitMQClient, err := binance_rabbitmq.New[*binance.WsTradeEvent](rabbitMQClient)
 	if err != nil {
 		return fmt.Errorf("couldn't set up Binance RabbitMQ Client: %w", err)
 	}
 	binanceRabbitMQLogger := streamerLogger.With().Str("component", "binance_rabbitmq").Logger()
 	binanceRabbitMQLogger.Info().Msg("Binance RabbitMQ Client instantiated")
 
-	binanceHandler := func(event *binance.WsBookTickerEvent) {
-		err = binanceRabbitMQClient.Publish(&binance_rabbitmq.Message[*binance.WsBookTickerEvent]{
+	binanceHandler := func(event *binance.WsTradeEvent) {
+		err = binanceRabbitMQClient.Publish(&binance_rabbitmq.Message[*binance.WsTradeEvent]{
 			TraceID: "",
 			Data:    event,
 		})
@@ -112,7 +112,7 @@ func run(
 		}
 	}
 
-	stopChannels, doneChannels := handleBinanceTickerBook(streamerLogger, config.Binance.Symbols, binanceHandler)
+	stopChannels, doneChannels := handleBinanceTrade(streamerLogger, config.Binance.Symbols, binanceHandler)
 
 	setupLogger.Info().Msg("Streamer is running, press Ctrl+C to stop.")
 
@@ -140,10 +140,10 @@ func httpRouterSetup(
 	streamerLogger.Info().Msg("HTTP router is setting up...")
 }
 
-func handleBinanceTickerBook(
+func handleBinanceTrade(
 	streamerLogger zerolog.Logger,
 	symbols []string,
-	handler binance.WsBookTickerHandler,
+	handler binance.WsTradeHandler,
 ) ([]chan struct{}, []chan struct{}) {
 	binanceLogger := streamerLogger.With().Str("component", "binance").Logger()
 
@@ -152,9 +152,9 @@ func handleBinanceTickerBook(
 
 	for _, symbol := range symbols {
 		binanceLogger.Info().Str("symbol", symbol).Msg("Setting up websocket connection.")
-		stopC, doneC, err := binance.WsBookTickerServe(
+		stopC, doneC, err := binance.WsTradeServe(
 			symbol,
-			func(event *binance.WsBookTickerEvent) {
+			func(event *binance.WsTradeEvent) {
 				handler(event)
 				// binanceLogger.
 				// 	Info().

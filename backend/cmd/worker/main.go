@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/adshao/go-binance/v2"
 	"github.com/daszybak/realtime-log-pipeline/backend/internal/binance_rabbitmq"
@@ -93,7 +94,7 @@ func run(
 		return fmt.Errorf("couldn't set up RabbitMQ Client: %w", err)
 	}
 	setupLogger.Info().Str("component", "rabbitmq").Msg("RabbitMQ client instantiated")
-	binanceRabbitMQClient, err := binance_rabbitmq.New[*binance.WsBookTickerEvent](rabbitMQClient)
+	binanceRabbitMQClient, err := binance_rabbitmq.New[*binance.WsTradeEvent](rabbitMQClient)
 	if err != nil {
 		return fmt.Errorf("couldn't set up Binance RabbitMQ Client: %w", err)
 	}
@@ -106,8 +107,8 @@ func run(
 		binanceRabbitMQLogger.
 			Info().
 			Str("symbol", m.Data.Symbol).
-			Str("best_bid_price", m.Data.BestBidPrice).
-			Str("best_asl_price", m.Data.BestAskPrice).
+			Str("price", m.Data.Price).
+			Int64("time", m.Data.TradeTime).
 			Msg("Received event from RabbitMQ")
 	}
 	if err != nil {
@@ -127,58 +128,4 @@ func httpRouterSetup(
 ) {
 	// TODO Setup router using `chi`.
 	streamerLogger.Info().Msg("HTTP router is setting up...")
-}
-
-func handleBinanceTickerBook(
-	streamerLogger zerolog.Logger,
-	symbols []string,
-	handler binance.WsBookTickerHandler,
-) (stopChannels []chan struct{}, doneChannels []chan struct{}) {
-	binanceLogger := streamerLogger.With().Str("component", "binance").Logger()
-
-	for _, symbol := range symbols {
-		binanceLogger.Info().Str("symbol", symbol).Msg("Setting up websocket connection.")
-		stopC, doneC, err := binance.WsBookTickerServe(
-			symbol,
-			func(event *binance.WsBookTickerEvent) {
-				handler(event)
-				// binanceLogger.
-				// 	Info().
-				// 	Str("symbol", symbol).
-				// 	Str("best_ask_price", event.BestAskPrice).
-				// 	Str("best_bid_price", event.BestBidPrice).
-				// 	Msg("Received ticker update.")
-			},
-			func(err error) {
-				binanceLogger.
-					Err(err).
-					Str("symbol", symbol).
-					Msg("Failed to receive book ticker event.")
-			},
-		)
-		if err != nil {
-			// TODO Add exponential back-off reconnection.
-			binanceLogger.
-				Err(err).
-				Str("symbol", symbol).
-				Msg("Could not open binance book ticker websocket connection.")
-			continue
-		}
-
-		binanceLogger.
-			Info().
-			Str("symbol", symbol).
-			Msg("Websocket connection established.")
-		stopChannels = append(stopChannels, stopC)
-		doneChannels = append(doneChannels, doneC)
-
-		// Monitor connection health in background.
-		// TODO We should monitor with some tool.
-		go func(symbol string, doneC chan struct{}) {
-			<-doneC
-			binanceLogger.Warn().Str("symbol", symbol).Msg("Websocket connection closed.")
-		}(symbol, doneC)
-	}
-
-	return stopChannels, doneChannels
 }
